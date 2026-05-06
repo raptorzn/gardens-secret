@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>The Garden's Secret</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
+  <style>
+    body { margin: 0; background: #000; }
+    #overlay {
+      position: fixed;
+      bottom: 30px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 999;
+      text-align: center;
+      font-family: Georgia, serif;
+    }
+    #instructionText {
+      background: rgba(0,0,0,0.75);
+      color: #FFD700;
+      padding: 10px 20px;
+      border-radius: 20px;
+      font-size: 14px;
+      margin-bottom: 10px;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Overlay UI for non-VR view -->
+  <div id="overlay">
+    <div id="instructionText">Press SPACE to collect · Enter AR on Quest 3</div>
+  </div>
+
+  <a-scene
+    webxr="requiredFeatures: local-floor; optionalFeatures: bounded-floor, hand-tracking"
+    background="color: transparent"
+    renderer="colorManagement: true; alpha: true">
+
+    <!-- Lighting -->
+    <a-light type="ambient" intensity="2" color="#ffffff"></a-light>
+    <a-light type="directional" position="1 5 -2" intensity="1.5"></a-light>
+
+    <!-- MEMORY ORB — glowing golden sphere that pulses -->
+    <a-sphere
+      id="memoryOrb"
+      position="0 1.4 -2"
+      radius="0.28"
+      material="color: #FFD700; emissive: #FFD700; emissiveIntensity: 0.9; opacity: 0.92"
+      animation__float="property: position; to: 0 1.65 -2; dur: 2200;
+                        dir: alternate; loop: true; easing: easeInOutSine"
+      animation__pulse="property: material.emissiveIntensity; to: 0.3; dur: 1800;
+                        dir: alternate; loop: true"
+      visible="false">
+    </a-sphere>
+
+    <!-- ORB GLOW RING -->
+    <a-torus
+      id="orbRing"
+      position="0 1.4 -2"
+      radius="0.38"
+      radius-tubular="0.02"
+      material="color: #FFD700; emissive: #FFD700; emissiveIntensity: 0.5; opacity: 0.5"
+      animation__spin="property: rotation; to: 0 360 0; dur: 4000; loop: true; easing: linear"
+      animation__float="property: position; to: 0 1.65 -2; dur: 2200;
+                        dir: alternate; loop: true; easing: easeInOutSine"
+      visible="false">
+    </a-torus>
+
+    <!-- STORY PANEL — appears after collection -->
+    <a-entity id="storyPanel" position="0 1.6 -2.2" visible="false">
+      <a-plane
+        width="2.4" height="1.0"
+        material="color: #0d1f12; opacity: 0.88; transparent: true"
+        position="0 0 -0.01">
+      </a-plane>
+      <a-text
+        id="storyText"
+        value=""
+        align="center"
+        color="#FFD700"
+        width="2.1"
+        wrap-count="32"
+        position="0 0 0.01">
+      </a-text>
+    </a-entity>
+
+    <!-- COUNTER UI — always visible -->
+    <a-entity id="counterUI" position="-0.6 2.7 -2.5">
+      <a-plane
+        width="1.3" height="0.38"
+        material="color: #0d1f12; opacity: 0.82; transparent: true">
+      </a-plane>
+      <a-text
+        id="counterText"
+        value="Memories: 0 / 5"
+        align="center"
+        color="#90EE90"
+        width="1.2"
+        position="0 0 0.01">
+      </a-text>
+    </a-entity>
+
+    <!-- TIMER UI -->
+    <a-entity id="timerUI" position="0.6 2.7 -2.5">
+      <a-plane
+        width="1.1" height="0.38"
+        material="color: #0d1f12; opacity: 0.82; transparent: true">
+      </a-plane>
+      <a-text
+        id="timerText"
+        value="15:00"
+        align="center"
+        color="#FF6B6B"
+        width="1.0"
+        position="0 0 0.01">
+      </a-text>
+    </a-entity>
+
+    <!-- STATION LABEL — shows current station name -->
+    <a-entity id="stationUI" position="0 2.3 -2.5" visible="false">
+      <a-plane
+        width="2.8" height="0.38"
+        material="color: #0d1f12; opacity: 0.82; transparent: true">
+      </a-plane>
+      <a-text
+        id="stationText"
+        value=""
+        align="center"
+        color="#c8e6c9"
+        width="2.6"
+        position="0 0 0.01">
+      </a-text>
+    </a-entity>
+
+    <!-- WIN SCREEN -->
+    <a-entity id="winScreen" position="0 1.6 -2.2" visible="false">
+      <a-plane
+        width="2.8" height="1.6"
+        material="color: #0d1f12; opacity: 0.93; transparent: true">
+      </a-plane>
+      <a-text
+        id="winText"
+        value="The Garden's Secret\nIs Restored.\n\nAll five memories gathered.\nThe spirit of the\nMillennium Garden lives on."
+        align="center"
+        color="#FFD700"
+        width="2.5"
+        wrap-count="28"
+        position="0 0 0.01">
+      </a-text>
+    </a-entity>
+
+    <!-- CAMERA -->
+    <a-camera
+      look-controls="pointerLockEnabled: false"
+      wasd-controls="enabled: false">
+    </a-camera>
+
+  </a-scene>
+
+  <script>
+    // ─── GAME DATA ───────────────────────────────────────────────
+    const stations = [
+      {
+        name: "Station 1 — The Shelter",
+        story: "Memory 1 of 5\n\nThe Millennium Garden opened\n4 July 2000 — conceived as\na secret garden for reflection.",
+        collected: false
+      },
+      {
+        name: "Station 2 — Topiary Cone 2",
+        story: "Memory 2 of 5\n\nTeresa Duffy, 1986–2000.\nShe brought joy to the lives\nof staff and students.",
+        collected: false
+      },
+      {
+        name: "Station 3 — Topiary Cone 5",
+        story: "Memory 3 of 5\n\nDesigned by Quartet Design.\nLand donated by The Boots\nCompany in 2000.",
+        collected: false
+      },
+      {
+        name: "Station 4 — Armillary Sphere",
+        story: "Memory 4 of 5\n\nOpened by Lord Dearing,\nChancellor of the University.\nThis place holds many stories.",
+        collected: false
+      },
+      {
+        name: "Station 5 — Clock Pool",
+        story: "Memory 5 of 5\n\nAll memories gathered.\nNow walk the labyrinth.\nReveal the garden's secret.",
+        collected: false
+      }
+    ];
+
+    // ─── ELEMENT REFERENCES ──────────────────────────────────────
+    const memoryOrb   = document.getElementById('memoryOrb');
+    const orbRing     = document.getElementById('orbRing');
+    const storyPanel  = document.getElementById('storyPanel');
+    const storyText   = document.getElementById('storyText');
+    const counterText = document.getElementById('counterText');
+    const timerText   = document.getElementById('timerText');
+    const stationText = document.getElementById('stationText');
+    const stationUI   = document.getElementById('stationUI');
+    const winScreen   = document.getElementById('winScreen');
+
+    // ─── GAME STATE ──────────────────────────────────────────────
+    let currentStation  = 0;
+    let memoriesCount   = 0;
+    let timerSeconds    = 900; // 15 minutes
+    let timerInterval   = null;
+    let gameStarted     = false;
+    let gameWon         = false;
+    let collecting      = false; // prevent double-trigger
+
+    // ─── START GAME ──────────────────────────────────────────────
+    function startGame() {
+      if (gameStarted) return;
+      gameStarted = true;
+      showCurrentStation();
+      startTimer();
+      document.getElementById('overlay').style.display = 'none';
+    }
+
+    // ─── SHOW CURRENT STATION ────────────────────────────────────
+    function showCurrentStation() {
+      if (currentStation >= stations.length) return;
+      const s = stations[currentStation];
+      stationText.setAttribute('value', '> ' + s.name);
+      stationUI.setAttribute('visible', true);
+      memoryOrb.setAttribute('visible', true);
+      orbRing.setAttribute('visible', true);
+      storyPanel.setAttribute('visible', false);
+    }
+
+    // ─── COLLECT FRAGMENT ────────────────────────────────────────
+    function collectFragment() {
+      if (!gameStarted || gameWon || collecting) return;
+      if (currentStation >= stations.length) {
+        // All 5 collected — trigger win
+        showWin();
+        return;
+      }
+
+      collecting = true;
+      const s = stations[currentStation];
+      if (s.collected) { collecting = false; return; }
+
+      // Mark collected
+      s.collected = true;
+      memoriesCount++;
+
+      // Hide orb
+      memoryOrb.setAttribute('visible', false);
+      orbRing.setAttribute('visible', false);
+
+      // Show story text
+      storyText.setAttribute('value', s.story);
+      storyPanel.setAttribute('visible', true);
+
+      // Update counter
+      counterText.setAttribute('value', 'Memories: ' + memoriesCount + ' / 5');
+
+      // After 5 seconds move to next station
+      setTimeout(() => {
+        storyPanel.setAttribute('visible', false);
+        currentStation++;
+        collecting = false;
+
+        if (memoriesCount >= 5) {
+          stationText.setAttribute('value', '>> Walk the Labyrinth to win!');
+          stationUI.setAttribute('visible', true);
+          memoryOrb.setAttribute('visible', false);
+          orbRing.setAttribute('visible', false);
+        } else {
+          showCurrentStation();
+        }
+      }, 5000);
+    }
+
+    // ─── WIN ─────────────────────────────────────────────────────
+    function showWin() {
+      gameWon = true;
+      clearInterval(timerInterval);
+      memoryOrb.setAttribute('visible', false);
+      orbRing.setAttribute('visible', false);
+      storyPanel.setAttribute('visible', false);
+      stationUI.setAttribute('visible', false);
+      winScreen.setAttribute('visible', true);
+    }
+
+    // ─── TIMER ───────────────────────────────────────────────────
+    function startTimer() {
+      timerInterval = setInterval(() => {
+        timerSeconds--;
+        const m = Math.floor(timerSeconds / 60);
+        const s = timerSeconds % 60;
+        timerText.setAttribute('value',
+          String(m).padStart(2,'0') + ':' + String(s).padStart(2,'0'));
+        if (timerSeconds <= 0) {
+          clearInterval(timerInterval);
+          timerText.setAttribute('value', 'TIME UP');
+        }
+      }, 1000);
+    }
+
+    // ─── INPUT: QUEST 3 CONTROLLER ───────────────────────────────
+    document.querySelector('a-scene').addEventListener('enter-vr', () => {
+      setTimeout(startGame, 1500);
+
+      const scene = document.querySelector('a-scene');
+      scene.renderer.xr.addEventListener('sessionstart', () => {
+        const session = scene.renderer.xr.getSession();
+        session.addEventListener('selectstart', () => {
+          if (!gameStarted) startGame();
+          else collectFragment();
+        });
+      });
+    });
+
+    // ─── INPUT: KEYBOARD (desktop testing) ───────────────────────
+    document.addEventListener('keydown', (e) => {
+      if (e.code === 'Space') {
+        if (!gameStarted) startGame();
+        else collectFragment();
+      }
+      if (e.code === 'KeyW') showWin(); // test win state
+    });
+  </script>
+
+</body>
+</html>
