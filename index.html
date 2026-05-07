@@ -28,10 +28,35 @@
 </head>
 <body>
 
-  <!-- Overlay UI for non-VR view -->
+  <!-- Overlay UI -->
   <div id="overlay">
     <div id="instructionText">Press SPACE to collect · Enter AR on Quest 3</div>
   </div>
+
+  <!-- Custom AR Button (replaces A-Frame's default VR button) -->
+  <button id="arBtn">
+    Enter AR
+  </button>
+
+  <style>
+    #arBtn {
+      position: fixed;
+      bottom: 24px;
+      right: 24px;
+      padding: 14px 26px;
+      background: #FFD700;
+      color: #1a1a1a;
+      border: none;
+      border-radius: 30px;
+      font-size: 17px;
+      font-weight: bold;
+      font-family: Georgia, serif;
+      cursor: pointer;
+      z-index: 9999;
+      box-shadow: 0 4px 15px rgba(255,215,0,0.4);
+    }
+    #arBtn:active { opacity: 0.8; }
+  </style>
 
   <a-scene
     webxr="requiredFeatures: local-floor; optionalFeatures: bounded-floor, hand-tracking"
@@ -300,18 +325,61 @@
       }, 1000);
     }
 
-    // ─── INPUT: QUEST 3 CONTROLLER ───────────────────────────────
-    document.querySelector('a-scene').addEventListener('enter-vr', () => {
-      setTimeout(startGame, 1500);
+    // ─── INPUT: AR BUTTON ────────────────────────────────────────
+    // Make functions globally accessible
+    window.gameStarted = false;
+    window.startGame = startGame;
+    window.collectFragment = collectFragment;
 
-      const scene = document.querySelector('a-scene');
-      scene.renderer.xr.addEventListener('sessionstart', () => {
-        const session = scene.renderer.xr.getSession();
-        session.addEventListener('selectstart', () => {
-          if (!gameStarted) startGame();
-          else collectFragment();
+    const arBtn = document.getElementById('arBtn');
+
+    arBtn.addEventListener('click', async () => {
+      if (!navigator.xr) {
+        alert('WebXR not supported on this browser.');
+        return;
+      }
+
+      const supported = await navigator.xr.isSessionSupported('immersive-ar');
+      if (!supported) {
+        alert('AR mode not supported. Make sure you are on Quest 3.');
+        return;
+      }
+
+      try {
+        const session = await navigator.xr.requestSession('immersive-ar', {
+          requiredFeatures: ['local-floor'],
+          optionalFeatures: ['bounded-floor', 'hand-tracking']
         });
-      });
+
+        const scene = document.querySelector('a-scene');
+        await scene.renderer.xr.setSession(session);
+
+        // Hide AR button once inside
+        arBtn.style.display = 'none';
+        document.getElementById('overlay').style.display = 'none';
+
+        // Start game after short delay
+        setTimeout(startGame, 1500);
+
+        // Listen for controller trigger
+        session.addEventListener('selectstart', () => {
+          collectFragment();
+        });
+
+        session.addEventListener('end', () => {
+          arBtn.style.display = 'block';
+        });
+
+      } catch(err) {
+        console.error('AR session error:', err);
+        alert('Could not start AR session: ' + err.message);
+      }
+    });
+
+    // ─── Also hide A-Frame's default VR button ───────────────────
+    document.querySelector('a-scene').addEventListener('loaded', () => {
+      const vrBtn = document.querySelector('.a-enter-vr');
+      if (vrBtn) vrBtn.style.display = 'none';
     });
 
     // ─── INPUT: KEYBOARD (desktop testing) ───────────────────────
@@ -320,7 +388,7 @@
         if (!gameStarted) startGame();
         else collectFragment();
       }
-      if (e.code === 'KeyW') showWin(); // test win state
+      if (e.code === 'KeyW') showWin();
     });
   </script>
 
